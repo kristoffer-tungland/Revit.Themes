@@ -1,6 +1,6 @@
 # Revit.Themes
 
-A lightweight WPF library that applies Revit-like control styling and automatically switches between light and dark themes based on the current Revit `UITheme`.
+A lightweight WPF library that applies Revit-like control styling, automatically switches between light and dark themes based on the current Revit `UITheme`, and reuses Revit's customized theme colors when Revit exposes them.
 
 ## Supported Revit versions
 
