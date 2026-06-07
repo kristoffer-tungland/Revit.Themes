@@ -174,10 +174,10 @@ public static class RevitThemeService
             .Select(parameter => Expression.Parameter(parameter.ParameterType, parameter.Name))
             .ToArray();
 
-        var sender = parameters.Length > 0
+        Expression sender = parameters.Length > 0
             ? Expression.Convert(parameters[0], typeof(object))
             : Expression.Constant(null, typeof(object));
-        var args = parameters.Length > 1
+        Expression args = parameters.Length > 1
             ? Expression.Convert(parameters[1], typeof(object))
             : Expression.Constant(null, typeof(object));
 
