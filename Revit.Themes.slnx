@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Revit.Themes/Revit.Themes.csproj" />
+  </Folder>
+</Solution>
