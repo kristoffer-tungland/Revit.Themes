@@ -130,11 +130,11 @@ public static class RevitThemeService
         }
 
         var colors = new Dictionary<string, Color>(StringComparer.Ordinal);
-        foreach (var (resourceKey, propertyNames) in ResourceColorPropertyNames)
+        foreach (var resourceColorProperty in ResourceColorPropertyNames)
         {
-            if (TryGetFirstColor(colorSources, propertyNames, out var color))
+            if (TryGetFirstColor(colorSources, resourceColorProperty.Value, out var color))
             {
-                colors[resourceKey] = color;
+                colors[resourceColorProperty.Key] = color;
             }
         }
 

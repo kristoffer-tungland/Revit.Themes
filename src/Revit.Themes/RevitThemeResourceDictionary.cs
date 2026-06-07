@@ -53,9 +53,9 @@ public sealed class RevitThemeResourceDictionary : ResourceDictionary
             Remove(key);
         }
 
-        foreach (var (key, color) in colors)
+        foreach (var colorEntry in colors)
         {
-            this[key] = color;
+            this[colorEntry.Key] = colorEntry.Value;
         }
     }
 
