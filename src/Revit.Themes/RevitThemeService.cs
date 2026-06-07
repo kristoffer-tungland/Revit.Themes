@@ -74,9 +74,16 @@ public static class RevitThemeService
             return resolvedType;
         }
 
+        var typeName = assemblyQualifiedName;
+        var separatorIndex = assemblyQualifiedName.IndexOf(',');
+        if (separatorIndex >= 0)
+        {
+            typeName = assemblyQualifiedName.Substring(0, separatorIndex);
+        }
+
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            resolvedType = assembly.GetType(assemblyQualifiedName.Split(',')[0], throwOnError: false);
+            resolvedType = assembly.GetType(typeName, throwOnError: false);
             if (resolvedType is not null)
             {
                 return resolvedType;

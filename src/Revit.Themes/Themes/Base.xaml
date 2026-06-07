@@ -11,24 +11,24 @@
     <Setter Property="Foreground" Value="{DynamicResource Revit.ForegroundBrush}" />
   </Style>
 
-  <Style TargetType="Control">
+  <Style x:Key="Revit.BaseControlStyle" TargetType="Control">
     <Setter Property="Background" Value="{DynamicResource Revit.ControlBackgroundBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource Revit.ForegroundBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Revit.BorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
-  <Style TargetType="Button" BasedOn="{StaticResource {x:Type Control}}">
+  <Style TargetType="Button" BasedOn="{StaticResource Revit.BaseControlStyle}">
     <Setter Property="Padding" Value="10,4" />
     <Setter Property="Margin" Value="2" />
   </Style>
 
-  <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type Control}}">
+  <Style TargetType="TextBox" BasedOn="{StaticResource Revit.BaseControlStyle}">
     <Setter Property="Padding" Value="4" />
     <Setter Property="Margin" Value="2" />
   </Style>
 
-  <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type Control}}">
+  <Style TargetType="ComboBox" BasedOn="{StaticResource Revit.BaseControlStyle}">
     <Setter Property="Padding" Value="4" />
     <Setter Property="Margin" Value="2" />
   </Style>
@@ -38,7 +38,7 @@
     <Setter Property="Margin" Value="2" />
   </Style>
 
-  <Style TargetType="ListBox" BasedOn="{StaticResource {x:Type Control}}">
+  <Style TargetType="ListBox" BasedOn="{StaticResource Revit.BaseControlStyle}">
     <Setter Property="Padding" Value="2" />
     <Setter Property="Margin" Value="2" />
   </Style>
