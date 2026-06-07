@@ -27,3 +27,24 @@ You can also set the theme explicitly:
 var resources = new RevitThemeResourceDictionary();
 resources.SetTheme(RevitTheme.Dark);
 ```
+
+## Automatic refresh on theme change
+
+Call `EnableAutoRefresh` to automatically re-apply the theme whenever Revit raises its `ThemeChanged` event:
+
+```csharp
+var themeResources = RevitThemeResourceDictionary.ApplyTo(Application.Current.Resources);
+themeResources.EnableAutoRefresh();
+
+// To stop listening:
+themeResources.DisableAutoRefresh();
+```
+
+You can also subscribe directly to the service event:
+
+```csharp
+RevitThemeService.ThemeChanged += (sender, e) =>
+{
+    // called after Revit changes the theme
+};
+```

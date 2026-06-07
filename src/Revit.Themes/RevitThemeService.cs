@@ -4,6 +4,55 @@ namespace Revit.Themes;
 
 public static class RevitThemeService
 {
+    private static EventHandler? _themeChanged;
+    private static bool _isSubscribedToRevit;
+
+    public static event EventHandler? ThemeChanged
+    {
+        add
+        {
+            _themeChanged += value;
+            EnsureRevitSubscription();
+        }
+        remove
+        {
+            _themeChanged -= value;
+        }
+    }
+
+    private static void EnsureRevitSubscription()
+    {
+        if (_isSubscribedToRevit)
+        {
+            return;
+        }
+
+        _isSubscribedToRevit = TrySubscribeToRevitThemeChanged();
+    }
+
+    private static bool TrySubscribeToRevitThemeChanged()
+    {
+        var uiThemeManager = ResolveType("Autodesk.Revit.UI.UIThemeManager, RevitAPIUI");
+        if (uiThemeManager is null)
+        {
+            return false;
+        }
+
+        var themeChangedEvent = uiThemeManager.GetEvent("ThemeChanged", BindingFlags.Public | BindingFlags.Static);
+        if (themeChangedEvent is null)
+        {
+            return false;
+        }
+
+        themeChangedEvent.AddEventHandler(null, new EventHandler(OnRevitThemeChanged));
+        return true;
+    }
+
+    private static void OnRevitThemeChanged(object? sender, EventArgs e)
+    {
+        _themeChanged?.Invoke(sender, e);
+    }
+
     public static RevitTheme GetCurrentTheme(Func<object?>? currentThemeProvider = null)
     {
         var rawTheme = currentThemeProvider?.Invoke() ?? TryGetRevitCurrentTheme();
