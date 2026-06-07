@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Windows.Media;
 
@@ -66,6 +68,8 @@ public static class RevitThemeService
 
     private static EventHandler? _themeChanged;
     private static bool _isSubscribedToRevit;
+    private static bool _hasKnownTheme;
+    private static RevitTheme _knownTheme;
 
     public static event EventHandler? ThemeChanged
     {
@@ -87,30 +91,189 @@ public static class RevitThemeService
             return;
         }
 
-        _isSubscribedToRevit = TrySubscribeToRevitThemeChanged();
+        _isSubscribedToRevit =
+            TrySubscribeToUiApplicationThemeChanged() ||
+            TrySubscribeToLegacyThemeChanged();
     }
 
-    private static bool TrySubscribeToRevitThemeChanged()
+    private static bool TrySubscribeToUiApplicationThemeChanged()
     {
-        var uiThemeManager = ResolveType("Autodesk.Revit.UI.UIThemeManager, RevitAPIUI");
-        if (uiThemeManager is null)
+        var uiApplication = TryGetCurrentUiApplication();
+        if (uiApplication is null)
         {
             return false;
         }
 
-        var themeChangedEvent = uiThemeManager.GetEvent("ThemeChanged", BindingFlags.Public | BindingFlags.Static);
-        if (themeChangedEvent is null)
+        var themeChangedEvent = uiApplication.GetType().GetEvent("ThemeChanged", BindingFlags.Public | BindingFlags.Instance);
+        if (themeChangedEvent?.EventHandlerType is null)
         {
             return false;
         }
 
-        themeChangedEvent.AddEventHandler(null, new EventHandler(OnRevitThemeChanged));
+        var handler = CreateEventHandler(themeChangedEvent.EventHandlerType, OnThemeSourceChanged);
+        themeChangedEvent.AddEventHandler(uiApplication, handler);
+        CaptureCurrentTheme();
         return true;
     }
 
-    private static void OnRevitThemeChanged(object? sender, EventArgs e)
+    private static bool TrySubscribeToLegacyThemeChanged()
     {
-        _themeChanged?.Invoke(sender, e);
+        var applicationThemeType = ResolveType("UIFramework.ApplicationTheme, UIFramework");
+        var currentTheme = applicationThemeType?.GetProperty("CurrentTheme", PublicStatic)?.GetValue(null);
+        var propertyChangedEvent = currentTheme?.GetType().GetEvent(nameof(INotifyPropertyChanged.PropertyChanged), BindingFlags.Public | BindingFlags.Instance);
+        if (propertyChangedEvent is null)
+        {
+            return false;
+        }
+
+        propertyChangedEvent.AddEventHandler(currentTheme, new PropertyChangedEventHandler(OnLegacyThemePropertyChanged));
+        CaptureCurrentTheme();
+        return true;
+    }
+
+    private static void OnLegacyThemePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnThemeSourceChanged(sender, e);
+    }
+
+    private static void OnThemeSourceChanged(object? sender, object? args)
+    {
+        if (!IsRelevantThemeChange(args))
+        {
+            return;
+        }
+
+        var currentTheme = GetCurrentTheme();
+        if (_hasKnownTheme && currentTheme == _knownTheme)
+        {
+            return;
+        }
+
+        _knownTheme = currentTheme;
+        _hasKnownTheme = true;
+        _themeChanged?.Invoke(sender, EventArgs.Empty);
+    }
+
+    private static bool IsRelevantThemeChange(object? args)
+    {
+        var themeChangedType = TryGetPropertyValue(args, "ThemeChangedType")?.ToString();
+        return themeChangedType is null || themeChangedType.Equals("UITheme", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void CaptureCurrentTheme()
+    {
+        _knownTheme = GetCurrentTheme();
+        _hasKnownTheme = true;
+    }
+
+    private static Delegate CreateEventHandler(Type eventHandlerType, Action<object?, object?> handler)
+    {
+        var invokeMethod = eventHandlerType.GetMethod("Invoke")
+            ?? throw new NotSupportedException($"Unable to create event handler for '{eventHandlerType.FullName}'.");
+        var parameters = invokeMethod.GetParameters()
+            .Select(parameter => Expression.Parameter(parameter.ParameterType, parameter.Name))
+            .ToArray();
+
+        var sender = parameters.Length > 0
+            ? Expression.Convert(parameters[0], typeof(object))
+            : Expression.Constant(null, typeof(object));
+        var args = parameters.Length > 1
+            ? Expression.Convert(parameters[1], typeof(object))
+            : Expression.Constant(null, typeof(object));
+
+        var body = Expression.Call(
+            Expression.Constant(handler),
+            handler.GetType().GetMethod(nameof(Action<object?, object?>.Invoke))!,
+            sender,
+            args);
+
+        return Expression.Lambda(eventHandlerType, body, parameters).Compile();
+    }
+
+    private static object? TryGetCurrentUiApplication()
+    {
+        try
+        {
+            var application = TryGetCurrentRevitApplication();
+            if (application is null)
+            {
+                return null;
+            }
+
+            var applicationType = ResolveType("Autodesk.Revit.ApplicationServices.Application, RevitAPI");
+            var uiApplicationType = ResolveType("Autodesk.Revit.UI.UIApplication, RevitAPIUI");
+            if (applicationType is null || uiApplicationType is null)
+            {
+                return null;
+            }
+
+            var constructor = uiApplicationType?.GetConstructor(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: [applicationType],
+                modifiers: null);
+            return constructor?.Invoke([application]);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static object? TryGetCurrentRevitApplication()
+    {
+        try
+        {
+            var dbApiAssembly = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(assembly => assembly.GetName().Name == "RevitDBAPI");
+            if (dbApiAssembly is null)
+            {
+                return null;
+            }
+
+            var getApplicationMethod = dbApiAssembly.ManifestModule
+                .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                .FirstOrDefault(method => method.Name == "RevitApplication.getApplication_");
+            var internalApplication = getApplicationMethod?.Invoke(null, null);
+            if (internalApplication is null)
+            {
+                return null;
+            }
+
+            var proxyType = dbApiAssembly.GetType("Autodesk.Revit.Proxy.ApplicationServices.ApplicationProxy", throwOnError: false);
+            if (proxyType is null)
+            {
+                return null;
+            }
+
+            var proxyConstructor = proxyType.GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly | BindingFlags.Instance,
+                binder: null,
+                types: [internalApplication.GetType()],
+                modifiers: null);
+            var proxy = proxyConstructor?.Invoke([internalApplication]);
+            if (proxy is null)
+            {
+                return null;
+            }
+
+            var applicationType = ResolveType("Autodesk.Revit.ApplicationServices.Application, RevitAPI");
+            if (applicationType is null)
+            {
+                return null;
+            }
+
+            var applicationConstructor = applicationType.GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.DeclaredOnly | BindingFlags.Instance,
+                binder: null,
+                types: [proxyType],
+                modifiers: null);
+            return applicationConstructor?.Invoke([proxy]);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public static RevitTheme GetCurrentTheme(Func<object?>? currentThemeProvider = null)
@@ -249,8 +412,13 @@ public static class RevitThemeService
         return TryConvertToColor(value, out color);
     }
 
-    private static object? TryGetPropertyValue(object source, string propertyName)
+    private static object? TryGetPropertyValue(object? source, string propertyName)
     {
+        if (source is null)
+        {
+            return null;
+        }
+
         var property = source.GetType().GetProperty(propertyName, PublicInstance | BindingFlags.IgnoreCase);
         if (property is null || property.GetIndexParameters().Length != 0)
         {
