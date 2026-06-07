@@ -1,10 +1,19 @@
 using System.Windows;
+using System.Windows.Media;
 
 namespace Revit.Themes;
 
 public sealed class RevitThemeResourceDictionary : ResourceDictionary
 {
     private static readonly Uri BaseResourcesUri = new("/Revit.Themes;component/Themes/Base.xaml", UriKind.Relative);
+    private static readonly string[] ThemeColorKeys =
+    [
+        "Revit.BackgroundColor",
+        "Revit.ControlBackgroundColor",
+        "Revit.BorderColor",
+        "Revit.ForegroundColor",
+        "Revit.HighlightColor",
+    ];
 
     private EventHandler? _autoRefreshHandler;
 
@@ -17,16 +26,37 @@ public sealed class RevitThemeResourceDictionary : ResourceDictionary
 
     public void Refresh(Func<object?>? currentThemeProvider = null)
     {
-        SetTheme(RevitThemeService.GetCurrentTheme(currentThemeProvider));
+        var theme = RevitThemeService.GetCurrentTheme(currentThemeProvider);
+        var colors = RevitThemeService.GetCurrentColors(currentThemeProvider);
+        SetTheme(theme, colors);
     }
 
     public void SetTheme(RevitTheme theme)
+    {
+        SetTheme(theme, new Dictionary<string, Color>(0));
+    }
+
+    private void SetTheme(RevitTheme theme, IReadOnlyDictionary<string, Color> colors)
     {
         CurrentTheme = theme;
 
         MergedDictionaries.Clear();
         MergedDictionaries.Add(new ResourceDictionary { Source = BaseResourcesUri });
         MergedDictionaries.Add(new ResourceDictionary { Source = GetThemeResourcesUri(theme) });
+        ApplyThemeColors(colors);
+    }
+
+    private void ApplyThemeColors(IReadOnlyDictionary<string, Color> colors)
+    {
+        foreach (var key in ThemeColorKeys)
+        {
+            Remove(key);
+        }
+
+        foreach (var (key, color) in colors)
+        {
+            this[key] = color;
+        }
     }
 
     public void EnableAutoRefresh(Func<object?>? currentThemeProvider = null)
