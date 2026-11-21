@@ -15,9 +15,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The .slnx solution needs SDK 9.0.200 or later; the tests run on .NET 8.
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Test
         run: dotnet test Revit.Themes.slnx --configuration Release
