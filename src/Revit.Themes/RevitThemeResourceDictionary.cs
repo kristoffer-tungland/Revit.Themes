@@ -1,68 +1,107 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Revit.Themes;
 
+/// <summary>
+/// Publishes Revit's theme colors as <c>Revit.*Color</c> and <c>Revit.*Brush</c> resources, optionally with implicit Revit-like control styles.
+/// </summary>
 public sealed class RevitThemeResourceDictionary : ResourceDictionary
 {
-    private static readonly Uri BaseResourcesUri = new("/Revit.Themes;component/Themes/Base.xaml", UriKind.Relative);
-    private static readonly string[] ThemeColorKeys =
-    [
-        "Revit.BackgroundColor",
-        "Revit.ControlBackgroundColor",
-        "Revit.BorderColor",
-        "Revit.ForegroundColor",
-        "Revit.HighlightColor",
-    ];
+    private static readonly Uri ControlStylesUri = new("/Revit.Themes;component/Themes/Controls.xaml", UriKind.Relative);
 
     private EventHandler? _autoRefreshHandler;
+    private bool _includeControlStyles = true;
 
+    /// <summary>Reads the current Revit theme and colors. Call it on Revit's thread or another STA thread.</summary>
     public RevitThemeResourceDictionary()
     {
         Refresh();
     }
 
+    /// <summary>Uses colors already read, for example on Revit's thread before opening a window on its own thread.</summary>
+    public RevitThemeResourceDictionary(RevitPalette palette, bool includeControlStyles = true)
+    {
+        _includeControlStyles = includeControlStyles;
+        Apply(palette);
+    }
+
     public RevitTheme CurrentTheme { get; private set; }
+
+    public RevitPalette Palette { get; private set; } = RevitPalette.Default(RevitTheme.Light);
+
+    /// <summary>
+    /// Implicit styles for Window, Button, TextBox, ComboBox, CheckBox and ListBox.
+    /// Turn it off when another control library, such as WPF-UI, styles the controls and only the colors are wanted.
+    /// </summary>
+    public bool IncludeControlStyles
+    {
+        get => _includeControlStyles;
+        set
+        {
+            if (_includeControlStyles == value)
+            {
+                return;
+            }
+
+            _includeControlStyles = value;
+            Apply(Palette);
+        }
+    }
 
     public void Refresh(Func<object?>? currentThemeProvider = null)
     {
-        var theme = RevitThemeService.GetCurrentTheme(currentThemeProvider);
-        var colors = RevitThemeService.GetCurrentColors(currentThemeProvider);
-        SetTheme(theme, colors);
+        Apply(RevitThemeService.GetCurrentPalette(currentThemeProvider));
     }
 
+    /// <summary>Uses the built-in snapshot of Revit's colors for the theme.</summary>
     public void SetTheme(RevitTheme theme)
     {
-        SetTheme(theme, new Dictionary<string, Color>(0));
+        Apply(RevitPalette.Default(theme));
     }
 
-    private void SetTheme(RevitTheme theme, IReadOnlyDictionary<string, Color> colors)
+    public void Apply(RevitPalette palette)
     {
-        CurrentTheme = theme;
+        Palette = palette;
+        CurrentTheme = palette.Theme;
+
+        // Frozen brushes can be shared by windows that run on their own threads.
+        foreach (var entry in palette.SemanticColors)
+        {
+            this[entry.Key] = entry.Value;
+            var brush = new SolidColorBrush(entry.Value);
+            brush.Freeze();
+            this[BrushKey(entry.Key)] = brush;
+        }
 
         MergedDictionaries.Clear();
-        MergedDictionaries.Add(new ResourceDictionary { Source = BaseResourcesUri });
-        MergedDictionaries.Add(new ResourceDictionary { Source = GetThemeResourcesUri(theme) });
-        ApplyThemeColors(colors);
-    }
-
-    private void ApplyThemeColors(IReadOnlyDictionary<string, Color> colors)
-    {
-        foreach (var key in ThemeColorKeys)
+        if (_includeControlStyles)
         {
-            Remove(key);
-        }
-
-        foreach (var colorEntry in colors)
-        {
-            this[colorEntry.Key] = colorEntry.Value;
+            MergedDictionaries.Add(new ResourceDictionary { Source = ControlStylesUri });
         }
     }
 
+    /// <summary>
+    /// Follows Revit's theme changes. Revit raises them on its own thread; the colors are read there and applied
+    /// on the thread that called this method, so windows that run on their own UI thread stay safe.
+    /// </summary>
     public void EnableAutoRefresh(Func<object?>? currentThemeProvider = null)
     {
         DisableAutoRefresh();
-        _autoRefreshHandler = (_, _) => Refresh(currentThemeProvider);
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        _autoRefreshHandler = (_, _) =>
+        {
+            var palette = RevitThemeService.GetCurrentPalette(currentThemeProvider);
+            if (dispatcher.CheckAccess())
+            {
+                Apply(palette);
+            }
+            else
+            {
+                dispatcher.BeginInvoke(new Action(() => Apply(palette)));
+            }
+        };
         RevitThemeService.ThemeChanged += _autoRefreshHandler;
     }
 
@@ -80,20 +119,18 @@ public sealed class RevitThemeResourceDictionary : ResourceDictionary
         var resources = target.MergedDictionaries.OfType<RevitThemeResourceDictionary>().FirstOrDefault();
         if (resources is null)
         {
-            resources = new RevitThemeResourceDictionary();
+            resources = new RevitThemeResourceDictionary(RevitThemeService.GetCurrentPalette(currentThemeProvider));
             target.MergedDictionaries.Add(resources);
         }
+        else
+        {
+            resources.Refresh(currentThemeProvider);
+        }
 
-        resources.Refresh(currentThemeProvider);
         return resources;
     }
 
-    private static Uri GetThemeResourcesUri(RevitTheme theme)
-    {
-        return theme switch
-        {
-            RevitTheme.Dark => new Uri("/Revit.Themes;component/Themes/Dark.xaml", UriKind.Relative),
-            _ => new Uri("/Revit.Themes;component/Themes/Light.xaml", UriKind.Relative),
-        };
-    }
+    /// <summary><c>Revit.BackgroundColor</c> becomes <c>Revit.BackgroundBrush</c>.</summary>
+    public static string BrushKey(string colorKey) =>
+        colorKey.EndsWith("Color", StringComparison.Ordinal) ? colorKey.Substring(0, colorKey.Length - "Color".Length) + "Brush" : colorKey + "Brush";
 }

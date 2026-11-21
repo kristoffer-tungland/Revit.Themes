@@ -1,11 +1,6 @@
+<!-- Optional implicit Revit-like control styles. The colors and brushes they use come from RevitThemeResourceDictionary. -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <SolidColorBrush x:Key="Revit.BackgroundBrush" Color="{DynamicResource Revit.BackgroundColor}" />
-  <SolidColorBrush x:Key="Revit.ControlBackgroundBrush" Color="{DynamicResource Revit.ControlBackgroundColor}" />
-  <SolidColorBrush x:Key="Revit.BorderBrush" Color="{DynamicResource Revit.BorderColor}" />
-  <SolidColorBrush x:Key="Revit.ForegroundBrush" Color="{DynamicResource Revit.ForegroundColor}" />
-  <SolidColorBrush x:Key="Revit.HighlightBrush" Color="{DynamicResource Revit.HighlightColor}" />
-
   <Style TargetType="Window">
     <Setter Property="Background" Value="{DynamicResource Revit.BackgroundBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource Revit.ForegroundBrush}" />
@@ -24,6 +19,7 @@
   </Style>
 
   <Style TargetType="TextBox" BasedOn="{StaticResource Revit.BaseControlStyle}">
+    <Setter Property="Background" Value="{DynamicResource Revit.InputBackgroundBrush}" />
     <Setter Property="Padding" Value="4" />
     <Setter Property="Margin" Value="2" />
   </Style>
@@ -39,6 +35,7 @@
   </Style>
 
   <Style TargetType="ListBox" BasedOn="{StaticResource Revit.BaseControlStyle}">
+    <Setter Property="Background" Value="{DynamicResource Revit.InputBackgroundBrush}" />
     <Setter Property="Padding" Value="2" />
     <Setter Property="Margin" Value="2" />
   </Style>

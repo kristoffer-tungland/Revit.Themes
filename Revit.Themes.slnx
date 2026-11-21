@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Revit.Themes/Revit.Themes.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Revit.Themes.Tests/Revit.Themes.Tests.csproj" />
+  </Folder>
 </Solution>
