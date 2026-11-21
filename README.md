@@ -84,6 +84,15 @@ themeResources.DisableAutoRefresh();
 
 Revit raises `ThemeChanged` on its own thread. The dictionary reads the new colors there and applies them on the thread that called `EnableAutoRefresh`, so windows that run on their own UI threads stay safe.
 
+## Releasing
+
+Push a tag such as `v0.2.0`. The `Build and publish` workflow tests, packs that version and publishes it to nuget.org with [trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing), so no API key is stored. It needs:
+
+- a trusted publishing policy on nuget.org for owner `kristoffer-tungland`, repository `Revit.Themes`, workflow file `build.yml` and environment `release`;
+- a repository secret `NUGET_USER` with the nuget.org profile name that owns the policy.
+
+## Reacting to theme changes in code
+
 To react yourself, subscribe to the service event. It is raised on Revit's thread:
 
 ```csharp
