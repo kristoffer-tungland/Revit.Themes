@@ -1,0 +1,63 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # WPF needs Windows.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The .slnx solution needs SDK 9.0.200 or later; the tests run on .NET 8.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Test
+        run: dotnet test Revit.Themes.slnx --configuration Release
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.Substring(1) } else { '0.0.0-ci.${{ github.run_number }}' }
+          dotnet pack src/Revit.Themes/Revit.Themes.csproj --configuration Release --output artifacts -p:Version=$version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/*
+
+  # A tag such as v0.1.0 publishes that version with nuget.org trusted publishing: no stored API key.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write # lets GitHub issue the OIDC token that nuget.org exchanges for a one-hour key
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts
+
+      - name: NuGet login (OIDC to temporary API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }} # nuget.org profile name, not the email address
+
+      - name: Publish to nuget.org
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
